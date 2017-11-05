@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func AddBlock(bc *Blockchain, data string) {
+func addBlock(bc *Blockchain, data string) {
 	err := bc.AddBlock(data)
 	if err != nil {
 		log.Fatal("Failed to add block")
@@ -22,8 +22,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	AddBlock(bc, "Send 1 BTC to Nikkii")
-	AddBlock(bc, "Send another 2 BTC to Nikkii")
+	addBlock(bc, "Send 1 BTC to Nikkii")
+	addBlock(bc, "Send another 2 BTC to Nikkii")
 
 	iter := bc.Iterator()
 
