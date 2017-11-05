@@ -1,4 +1,4 @@
-.PHONY: build clean
+.PHONY: build clean dep
 
 build:
 	@echo "Building blockchain..."
@@ -7,3 +7,7 @@ build:
 
 clean:
 	@rm -f bin/*
+
+dep:
+	@dep ensure
+	@dep prune

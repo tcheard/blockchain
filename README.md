@@ -4,6 +4,8 @@ Based on [Building Blockchain in Go](https://jeiwan.cc/posts/building-blockchain
 
 ## Building
 
+Go 1.8+ is required to build blockchain, which uses the new vendor directory.
+
 ```
 $ mkdir -p $GOPATH/src/github.com/tcheard
 $ git clone https://github.com/tcheard/blockchain.git $GOPATH/src/github.com/tcheard/blockchain
