@@ -42,7 +42,7 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 	)
 }
 
-var maxNonce = math.MaxInt64
+var maxNonce = math.MaxInt32
 
 // Run mines the block as a proof of work
 func (pow *ProofOfWork) Run() (int, []byte) {
