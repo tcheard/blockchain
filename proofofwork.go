@@ -29,29 +29,29 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 	return pow
 }
 
-func (pow *ProofOfWork) prepareData(nonce int) []byte {
+func (pow *ProofOfWork) prepareData(nonce int64) []byte {
 	return bytes.Join(
 		[][]byte{
 			pow.block.PrevBlockHash,
 			pow.block.Data,
 			IntToBytes(pow.block.Timestamp),
 			IntToBytes(int64(targetBits)),
-			IntToBytes(int64(nonce)),
+			IntToBytes(nonce),
 		},
 		[]byte{},
 	)
 }
 
-var maxNonce = math.MaxInt32
+var maxNonce int64 = math.MaxInt64
 
 // Run mines the block as a proof of work
-func (pow *ProofOfWork) Run() (int, []byte) {
+func (pow *ProofOfWork) Run() (int64, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
-	nonce := 0
+	var nonce int64
 
 	fmt.Printf("Mining the block containing '%s'\n", pow.block.Data)
-	for nonce < maxNonce {
+	for nonce <= maxNonce {
 		data := pow.prepareData(nonce)
 		hash = sha256.Sum256(data)
 		fmt.Printf("\r%x", hash)
