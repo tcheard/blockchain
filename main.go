@@ -21,6 +21,7 @@ func main() {
 		log.Fatal("Failed to get blockchain", err)
 		os.Exit(1)
 	}
+	defer bc.db.Close()
 
 	addBlock(bc, "Send 1 BTC to Nikkii")
 	addBlock(bc, "Send another 2 BTC to Nikkii")
