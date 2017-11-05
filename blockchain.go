@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/boltdb/bolt"
 	"github.com/pkg/errors"
 )
@@ -29,6 +31,8 @@ func NewBlockchain() (*Blockchain, error) {
 		b := tx.Bucket([]byte(blocksBucket))
 
 		if b == nil {
+			fmt.Println("No existing blockchain found. Creating a new one...")
+
 			genesis := NewGenesisBlock()
 			b, err := tx.CreateBucket([]byte(blocksBucket))
 			if err != nil {
