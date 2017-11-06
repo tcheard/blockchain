@@ -113,6 +113,26 @@ func (bc *Blockchain) FindUnspentTransactions(address string) ([]Transaction, er
 	return unspentTXs, nil
 }
 
+// FindUnspentTransactionOutputs finds and returns all unspent outputs for a given address
+func (bc *Blockchain) FindUnspentTransactionOutputs(address string) ([]TXOutput, error) {
+	var UTXOs []TXOutput
+
+	unspentTXs, err := bc.FindUnspentTransactions(address)
+	if err != nil {
+		return nil, perrors.Wrap(err, "failed to find unspent transactions")
+	}
+
+	for _, tx := range unspentTXs {
+		for _, out := range tx.Vout {
+			if out.CanBeUnlockedWith(address) {
+				UTXOs = append(UTXOs, out)
+			}
+		}
+	}
+
+	return UTXOs, nil
+}
+
 // BlockchainIterator provides an iterator that allows us to retrieve each
 // block in the blockchain
 type BlockchainIterator struct {
