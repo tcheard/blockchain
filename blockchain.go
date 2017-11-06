@@ -116,7 +116,7 @@ func dbExists() bool {
 
 // NewBlockchain creates a new blockchain by reading from the database
 func NewBlockchain() (*Blockchain, error) {
-	if dbExists() == false {
+	if !dbExists() {
 		return nil, errors.New("create a blockchain first")
 	}
 
