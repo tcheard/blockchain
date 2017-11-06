@@ -44,7 +44,7 @@ func (cli *CLI) printChain(bc *Blockchain) {
 	for {
 		block, err := bci.Next()
 		if err != nil {
-			fmt.Println("Failed to retrieve next block", err)
+			fmt.Printf("Failed to retrieve next block: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -77,7 +77,7 @@ func (cli *CLI) Run() {
 	switch os.Args[1] {
 	case "createblockchain":
 		if err := createBlockchainCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("Failed to parse addblock arguments")
+			fmt.Println("Failed to parse createblockchain arguments")
 			os.Exit(1)
 		}
 	case "printchain":
