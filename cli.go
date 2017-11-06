@@ -16,6 +16,7 @@ type CLI struct {
 func (cli *CLI) printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  createblockchain -address ADDRESS - create a new blockchain")
+	fmt.Println("  getbalance -address ADDRESS - get an address' balance")
 	fmt.Println("  printchain - print all the blocks of the blockchain")
 	fmt.Println("  version - print version info")
 }
@@ -36,6 +37,27 @@ func (cli *CLI) createBlockchain(address string) {
 	bc.db.Close()
 
 	fmt.Println("Done!")
+}
+
+func (cli *CLI) getBalance(address string) {
+	bc, err := NewBlockchain()
+	if err != nil {
+		fmt.Printf("Failed to retrieve blockchain: %v\n", err)
+		os.Exit(1)
+	}
+	defer bc.db.Close()
+
+	balance := 0
+	UTXOs, err := bc.FindUnspentTransactionOutputs(address)
+	if err != nil {
+		fmt.Printf("Failed to find unspent transaction outputs: %v\n", err)
+	}
+
+	for _, out := range UTXOs {
+		balance += out.Value
+	}
+
+	fmt.Printf("Balance for %s: %d\n", address, balance)
 }
 
 func (cli *CLI) printChain(bc *Blockchain) {
@@ -69,15 +91,22 @@ func (cli *CLI) Run() {
 	cli.validateArgs()
 
 	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
+	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "Address")
+	getBalanceAddress := getBalanceCmd.String("address", "", "Address")
 
 	switch os.Args[1] {
 	case "createblockchain":
 		if err := createBlockchainCmd.Parse(os.Args[2:]); err != nil {
 			fmt.Println("Failed to parse createblockchain arguments")
+			os.Exit(1)
+		}
+	case "getbalance":
+		if err := getBalanceCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Println("Failed to parse getbalance arguments")
 			os.Exit(1)
 		}
 	case "printchain":
@@ -102,6 +131,15 @@ func (cli *CLI) Run() {
 		}
 
 		cli.createBlockchain(*createBlockchainAddress)
+	}
+
+	if getBalanceCmd.Parsed() {
+		if *getBalanceAddress == "" {
+			getBalanceCmd.Usage()
+			os.Exit(1)
+		}
+
+		cli.getBalance(*getBalanceAddress)
 	}
 
 	if printChainCmd.Parsed() {
