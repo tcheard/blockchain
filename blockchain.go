@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"os"
 
@@ -63,6 +64,53 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 	}
 
 	return nil
+}
+
+// FindUnspentTransactions returns a list of transactions containing unspent outputs for a given address
+func (bc *Blockchain) FindUnspentTransactions(address string) ([]Transaction, error) {
+	var unspentTXs []Transaction
+	spentTXOs := make(map[string][]int)
+	bci := bc.Iterator()
+
+	for {
+		b, err := bci.Next()
+		if err != nil {
+			return nil, perrors.Wrap(err, "failed to retrieve next block")
+		}
+
+		for _, tx := range b.Transactions {
+			txID := hex.EncodeToString(tx.ID)
+		Outputs:
+			for outIdx, out := range tx.Vout {
+				if spentTXOs[txID] != nil {
+					for _, spentOut := range spentTXOs[txID] {
+						if spentOut == outIdx {
+							continue Outputs
+						}
+					}
+				}
+
+				if out.CanBeUnlockedWith(address) {
+					unspentTXs = append(unspentTXs, *tx)
+				}
+			}
+
+			if !tx.IsCoinbase() {
+				for _, in := range tx.Vin {
+					if in.CanUnlockOutputWith(address) {
+						inTxID := hex.EncodeToString(in.Txid)
+						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
+					}
+				}
+			}
+		}
+
+		if len(b.PrevBlockHash) == 0 {
+			break
+		}
+	}
+
+	return unspentTXs, nil
 }
 
 // BlockchainIterator provides an iterator that allows us to retrieve each
