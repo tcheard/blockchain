@@ -223,7 +223,7 @@ func CreateBlockchain(address string) (*Blockchain, error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		cbtx := NewCoinbaseTX(address, genesisCoinbaseData)
+		cbtx := NewCoinbaseTransaction(address, genesisCoinbaseData)
 		genesis := NewGenesisBlock(cbtx)
 
 		b, err := tx.CreateBucket([]byte(blocksBucket))

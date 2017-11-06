@@ -59,8 +59,8 @@ func (out *TXOutput) CanBeUnlockedWith(unlockingData string) bool {
 	return out.ScriptPubKey == unlockingData
 }
 
-// NewCoinbaseTX creates a new coinbase transaction
-func NewCoinbaseTX(to, data string) *Transaction {
+// NewCoinbaseTransaction creates a new coinbase transaction
+func NewCoinbaseTransaction(to, data string) *Transaction {
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
 	}
