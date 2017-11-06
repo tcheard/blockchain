@@ -57,7 +57,7 @@ func (cli *CLI) getBalance(address string) {
 		balance += out.Value
 	}
 
-	fmt.Printf("Balance for %s: %d\n", address, balance)
+	fmt.Printf("Balance for '%s': %d\n", address, balance)
 }
 
 func (cli *CLI) printChain(bc *Blockchain) {
