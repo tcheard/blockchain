@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+
+	perrors "github.com/pkg/errors"
 )
 
 const subsidy = 10
@@ -80,8 +84,53 @@ func NewCoinbaseTransaction(to, data string) *Transaction {
 		Vin:  []TXInput{txin},
 		Vout: []TXOutput{txout},
 	}
-
 	tx.SetID()
 
 	return &tx
+}
+
+// NewUTXOTransaction creates a new transaction
+func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) (*Transaction, error) {
+	var inputs []TXInput
+	var outputs []TXOutput
+
+	acc, validOutputs, err := bc.FindSpendableOutputs(from, amount)
+	if err != nil {
+		return nil, perrors.Wrap(err, "failed to find spendable outputs")
+	}
+
+	if acc < amount {
+		return nil, errors.New("not enough funds")
+	}
+
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid)
+		if err != nil {
+			return nil, perrors.Wrap(err, "failed to decode transaction id")
+		}
+
+		for _, out := range outs {
+			input := TXInput{
+				Txid:      txID,
+				Vout:      out,
+				ScriptSig: from,
+			}
+
+			inputs = append(inputs, input)
+		}
+	}
+
+	outputs = append(outputs, TXOutput{Value: amount, ScriptPubKey: to})
+	if acc > amount {
+		outputs = append(outputs, TXOutput{Value: acc - amount, ScriptPubKey: from}) // change
+	}
+
+	tx := Transaction{
+		ID:   nil,
+		Vin:  inputs,
+		Vout: outputs,
+	}
+	tx.SetID()
+
+	return &tx, nil
 }
