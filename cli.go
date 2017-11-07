@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 	"strconv"
@@ -15,10 +14,11 @@ type CLI struct {
 
 func (cli *CLI) printUsage() {
 	fmt.Println("Usage:")
-	fmt.Println("  createblockchain -address ADDRESS - create a new blockchain")
-	fmt.Println("  getbalance -address ADDRESS - get an address' balance")
-	fmt.Println("  printchain - print all the blocks of the blockchain")
-	fmt.Println("  version - print version info")
+	fmt.Println("  createblockchain -address ADDRESS - Create a blockchain and send genesis block reward to ADDRESS")
+	fmt.Println("  getbalance -address ADDRESS - Get balance of ADDRESS")
+	fmt.Println("  printchain - Print all the blocks of the blockchain")
+	fmt.Println("  send -from FROM -to TO -amount AMOUNT - Send AMOUNT of coins from FROM address to TO")
+	fmt.Println("  version - Print version info")
 }
 
 func (cli *CLI) validateArgs() {
@@ -51,6 +51,7 @@ func (cli *CLI) getBalance(address string) {
 	UTXOs, err := bc.FindUnspentTransactionOutputs(address)
 	if err != nil {
 		fmt.Printf("Failed to find unspent transaction outputs: %v\n", err)
+		os.Exit(1)
 	}
 
 	for _, out := range UTXOs {
@@ -60,7 +61,14 @@ func (cli *CLI) getBalance(address string) {
 	fmt.Printf("Balance for '%s': %d\n", address, balance)
 }
 
-func (cli *CLI) printChain(bc *Blockchain) {
+func (cli *CLI) printChain() {
+	bc, err := NewBlockchain()
+	if err != nil {
+		fmt.Printf("Failed to get blockchain: %v\n", err)
+		os.Exit(1)
+	}
+	defer bc.db.Close()
+
 	bci := bc.Iterator()
 
 	for {
@@ -82,7 +90,30 @@ func (cli *CLI) printChain(bc *Blockchain) {
 	}
 }
 
-func printVersion() {
+func (cli *CLI) send(from, to string, amount int) {
+	bc, err := NewBlockchain()
+	if err != nil {
+		fmt.Printf("Failed to get blockchain: %v\n", err)
+		os.Exit(1)
+	}
+	defer bc.db.Close()
+
+	tx, err := NewUTXOTransaction(from, to, amount, bc)
+	if err != nil {
+		fmt.Printf("Failed to create transaction: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = bc.MineBlock([]*Transaction{tx})
+	if err != nil {
+		fmt.Printf("Failed to mine block: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Success!")
+}
+
+func (cli *CLI) version() {
 	fmt.Printf("blockchain %s (Git SHA: %s, Go Version: %s)\n", Version, GitSHA, runtime.Version())
 }
 
@@ -91,32 +122,44 @@ func (cli *CLI) Run() {
 	cli.validateArgs()
 
 	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
-	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
-	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
-	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
-
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "Address")
+
+	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
 	getBalanceAddress := getBalanceCmd.String("address", "", "Address")
+
+	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
+
+	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
+	sendFrom := sendCmd.String("from", "", "Sender Address")
+	sendTo := sendCmd.String("to", "", "Receiver Address")
+	sendAmount := sendCmd.Int("amount", 0, "Amount being sent")
+
+	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
 	switch os.Args[1] {
 	case "createblockchain":
 		if err := createBlockchainCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("Failed to parse createblockchain arguments")
+			fmt.Printf("Failed to parse createblockchain arguments")
 			os.Exit(1)
 		}
 	case "getbalance":
 		if err := getBalanceCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("Failed to parse getbalance arguments")
+			fmt.Printf("Failed to parse getbalance arguments")
 			os.Exit(1)
 		}
 	case "printchain":
 		if err := printChainCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("Failed to parse printchain arguments")
+			fmt.Printf("Failed to parse printchain arguments")
+			os.Exit(1)
+		}
+	case "send":
+		if err := sendCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Printf("Failed to parse send arguments")
 			os.Exit(1)
 		}
 	case "version":
 		if err := versionCmd.Parse(os.Args[2:]); err != nil {
-			fmt.Println("Failed to parse version arguments")
+			fmt.Printf("Failed to parse version arguments")
 			os.Exit(1)
 		}
 	default:
@@ -143,17 +186,19 @@ func (cli *CLI) Run() {
 	}
 
 	if printChainCmd.Parsed() {
-		bc, err := NewBlockchain()
-		if err != nil {
-			log.Fatal("Failed to get blockchain", err)
+		cli.printChain()
+	}
+
+	if sendCmd.Parsed() {
+		if *sendFrom == "" || *sendTo == "" || *sendAmount == 0 {
+			sendCmd.Usage()
 			os.Exit(1)
 		}
-		defer bc.db.Close()
 
-		cli.printChain(bc)
+		cli.send(*sendFrom, *sendTo, *sendAmount)
 	}
 
 	if versionCmd.Parsed() {
-		printVersion()
+		cli.version()
 	}
 }
