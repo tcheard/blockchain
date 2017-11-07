@@ -133,6 +133,33 @@ func (bc *Blockchain) FindUnspentTransactionOutputs(address string) ([]TXOutput,
 	return UTXOs, nil
 }
 
+// FindSpendableOutputs finds and returns unspent outputs to reference in inputs
+func (bc *Blockchain) FindSpendableOutputs(address string, amount int) (int, map[string][]int, error) {
+	unspentOutputs := make(map[string][]int)
+	accumulated := 0
+
+	unspentTXs, err := bc.FindUnspentTransactions(address)
+	if err != nil {
+		return 0, nil, perrors.Wrap(err, "failed to retrieve unspent transactions")
+	}
+
+Work:
+	for _, tx := range unspentTXs {
+		txID := hex.EncodeToString(tx.ID)
+		for outIdx, out := range tx.Vout {
+			if out.CanBeUnlockedWith(address) && accumulated < amount {
+				accumulated += out.Value
+				unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
+				if accumulated >= amount {
+					break Work
+				}
+			}
+		}
+	}
+
+	return accumulated, unspentOutputs, nil
+}
+
 // BlockchainIterator provides an iterator that allows us to retrieve each
 // block in the blockchain
 type BlockchainIterator struct {
