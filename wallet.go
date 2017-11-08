@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -60,6 +61,16 @@ func HashPublicKey(pubKey []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
+// ValidateAddress checks if an address is valid
+func ValidateAddress(address string) bool {
+	pubKeyHash := Base58Decode([]byte(address))
+	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
+	version := pubKeyHash[0]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-addressChecksumLen]
+	targetChecksum := checksum(append([]byte{version}, pubKeyHash...))
+	return bytes.Compare(actualChecksum, targetChecksum) == 0
+}
+
 func newKeyPair() (ecdsa.PrivateKey, []byte, error) {
 	c := elliptic.P256()
 	private, err := ecdsa.GenerateKey(c, rand.Reader)
@@ -76,9 +87,4 @@ func checksum(payload []byte) []byte {
 	second := sha256.Sum256(first[:])
 
 	return second[:addressChecksumLen]
-}
-
-// Wallets stores a collection of wallets
-type Wallets struct {
-	Wallets map[string]*Wallet
 }
