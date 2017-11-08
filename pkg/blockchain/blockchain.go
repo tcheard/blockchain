@@ -1,4 +1,4 @@
-package main
+package blockchain
 
 import (
 	"encoding/hex"
@@ -18,7 +18,7 @@ const (
 // Blockchain represents the actual blockchain holding all its blocks
 type Blockchain struct {
 	tip []byte
-	db  *bolt.DB
+	DB  *bolt.DB
 }
 
 // NewBlockchain creates a new blockchain by reading from the database
@@ -45,7 +45,7 @@ func NewBlockchain() (*Blockchain, error) {
 		return nil, perrors.Wrap(err, "failed to update database")
 	}
 
-	return &Blockchain{tip: tip, db: db}, nil
+	return &Blockchain{tip: tip, DB: db}, nil
 }
 
 // CreateBlockchain starts a brand new blockchain
@@ -98,7 +98,7 @@ func CreateBlockchain(address string) (*Blockchain, error) {
 		return nil, perrors.Wrap(err, "failed to update database")
 	}
 
-	return &Blockchain{tip: tip, db: db}, nil
+	return &Blockchain{tip: tip, DB: db}, nil
 }
 
 // FindSpendableOutputs finds and returns unspent outputs to reference in inputs
@@ -204,7 +204,7 @@ func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]*TXOutput, error) {
 func (bc *Blockchain) Iterator() *BlockchainIterator {
 	return &BlockchainIterator{
 		currentHash: bc.tip,
-		db:          bc.db,
+		db:          bc.DB,
 	}
 }
 
@@ -212,7 +212,7 @@ func (bc *Blockchain) Iterator() *BlockchainIterator {
 func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 	var lastHash []byte
 
-	err := bc.db.View(func(tx *bolt.Tx) error {
+	err := bc.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		lastHash = b.Get([]byte("l"))
 
@@ -224,7 +224,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 
 	newBlock := NewBlock(transactions, lastHash)
 
-	err = bc.db.Update(func(tx *bolt.Tx) error {
+	err = bc.DB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 
 		nbSer, err := newBlock.Serialize()

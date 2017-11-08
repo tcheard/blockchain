@@ -1,7 +1,9 @@
-package main
+package blockchain
 
 import (
 	"bytes"
+
+	"github.com/tcheard/blockchain/pkg/util"
 )
 
 // TXOutput represents a transaction output
@@ -12,7 +14,7 @@ type TXOutput struct {
 
 // Lock signs the output
 func (out *TXOutput) Lock(address []byte) {
-	pubKeyHash := Base58Decode(address)
+	pubKeyHash := util.Base58Decode(address)
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 	out.PubKeyHash = pubKeyHash
 }

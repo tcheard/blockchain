@@ -1,4 +1,4 @@
-package main
+package blockchain
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	"github.com/tcheard/blockchain/pkg/util"
 )
 
 const targetBits = 24
@@ -34,9 +36,9 @@ func (pow *ProofOfWork) prepareData(nonce int64) []byte {
 		[][]byte{
 			pow.block.PrevBlockHash,
 			pow.block.HashTransactions(),
-			IntToBytes(pow.block.Timestamp),
-			IntToBytes(int64(targetBits)),
-			IntToBytes(nonce),
+			util.IntToBytes(pow.block.Timestamp),
+			util.IntToBytes(int64(targetBits)),
+			util.IntToBytes(nonce),
 		},
 		[]byte{},
 	)

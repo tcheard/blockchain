@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"flag"
@@ -6,6 +6,9 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+
+	"github.com/tcheard/blockchain/pkg/blockchain"
+	"github.com/tcheard/blockchain/pkg/util"
 )
 
 // CLI provides a handler for the basic CLI
@@ -31,18 +34,18 @@ func (cli *CLI) validateArgs() {
 }
 
 func (cli *CLI) createBlockchain(address string) {
-	bc, err := CreateBlockchain(address)
+	bc, err := blockchain.CreateBlockchain(address)
 	if err != nil {
 		fmt.Printf("Failed to create blockchain: %v\n", err)
 		os.Exit(1)
 	}
-	bc.db.Close()
+	bc.DB.Close()
 
 	fmt.Println("Done!")
 }
 
 func (cli *CLI) createWallet() {
-	wallets, _ := NewWallets()
+	wallets, _ := blockchain.NewWallets()
 	address, err := wallets.CreateWallet()
 	if err != nil {
 		fmt.Printf("Failed to create wallet: %v\n", err)
@@ -56,20 +59,20 @@ func (cli *CLI) createWallet() {
 }
 
 func (cli *CLI) getBalance(address string) {
-	if !ValidateAddress(address) {
+	if !blockchain.ValidateAddress(address) {
 		fmt.Printf("Address is not valid")
 		os.Exit(1)
 	}
 
-	bc, err := NewBlockchain()
+	bc, err := blockchain.NewBlockchain()
 	if err != nil {
 		fmt.Printf("Failed to retrieve blockchain: %v\n", err)
 		os.Exit(1)
 	}
-	defer bc.db.Close()
+	defer bc.DB.Close()
 
 	balance := 0
-	pubKeyHash := Base58Decode([]byte(address))
+	pubKeyHash := util.Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 	UTXOs, err := bc.FindUTXO(pubKeyHash)
 	if err != nil {
@@ -85,7 +88,7 @@ func (cli *CLI) getBalance(address string) {
 }
 
 func (cli *CLI) listAddresses() {
-	wallets, err := NewWallets()
+	wallets, err := blockchain.NewWallets()
 	if err != nil {
 		fmt.Printf("Failed to retrieve wallets: %v\n", err)
 	}
@@ -97,12 +100,12 @@ func (cli *CLI) listAddresses() {
 }
 
 func (cli *CLI) printChain() {
-	bc, err := NewBlockchain()
+	bc, err := blockchain.NewBlockchain()
 	if err != nil {
 		fmt.Printf("Failed to get blockchain: %v\n", err)
 		os.Exit(1)
 	}
-	defer bc.db.Close()
+	defer bc.DB.Close()
 
 	bci := bc.Iterator()
 
@@ -115,7 +118,7 @@ func (cli *CLI) printChain() {
 
 		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
 		fmt.Printf("Hash: %x\n", block.Hash)
-		pow := NewProofOfWork(block)
+		pow := blockchain.NewProofOfWork(block)
 		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
 		fmt.Println()
 
@@ -126,29 +129,29 @@ func (cli *CLI) printChain() {
 }
 
 func (cli *CLI) send(from, to string, amount int) {
-	if !ValidateAddress(from) {
+	if !blockchain.ValidateAddress(from) {
 		fmt.Printf("Address is not valid")
 		os.Exit(1)
 	}
-	if !ValidateAddress(to) {
+	if !blockchain.ValidateAddress(to) {
 		fmt.Printf("Address is not valid")
 		os.Exit(1)
 	}
 
-	bc, err := NewBlockchain()
+	bc, err := blockchain.NewBlockchain()
 	if err != nil {
 		fmt.Printf("Failed to get blockchain: %v\n", err)
 		os.Exit(1)
 	}
-	defer bc.db.Close()
+	defer bc.DB.Close()
 
-	tx, err := NewUTXOTransaction(from, to, amount, bc)
+	tx, err := blockchain.NewUTXOTransaction(from, to, amount, bc)
 	if err != nil {
 		fmt.Printf("Failed to create transaction: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = bc.MineBlock([]*Transaction{tx})
+	err = bc.MineBlock([]*blockchain.Transaction{tx})
 	if err != nil {
 		fmt.Printf("Failed to mine block: %v\n", err)
 		os.Exit(1)
