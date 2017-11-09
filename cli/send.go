@@ -29,8 +29,12 @@ func (cli *CLI) send(from, to string, amount int) {
 		fmt.Printf("Failed to create transaction: %v\n", err)
 		os.Exit(1)
 	}
+	cb, err := blockchain.NewCoinbaseTransaction(from, "") // For simplicity make the sender the miner
+	if err != nil {
+		fmt.Printf("Failed to create coinbase transaction: %v\n", err)
+	}
 
-	err = bc.MineBlock([]*blockchain.Transaction{tx})
+	err = bc.MineBlock([]*blockchain.Transaction{tx, cb})
 	if err != nil {
 		fmt.Printf("Failed to mine block: %v\n", err)
 		os.Exit(1)
