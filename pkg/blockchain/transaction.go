@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 
 	perrors "github.com/pkg/errors"
 )
@@ -51,6 +52,30 @@ func (tx *Transaction) Hash() ([]byte, error) {
 	hash := sha256.Sum256(ser)
 
 	return hash[:], nil
+}
+
+// String returns a human-readable representation of a transaction
+func (tx Transaction) String() string {
+	var lines []string
+
+	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
+
+	for i, input := range tx.Vin {
+
+		lines = append(lines, fmt.Sprintf("     Input %d:", i))
+		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.Txid))
+		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Vout))
+		lines = append(lines, fmt.Sprintf("       Signature: %x", input.Signature))
+		lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PubKey))
+	}
+
+	for i, output := range tx.Vout {
+		lines = append(lines, fmt.Sprintf("     Output %d:", i))
+		lines = append(lines, fmt.Sprintf("       Value:  %d", output.Value))
+		lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // NewCoinbaseTransaction creates a new coinbase transaction
