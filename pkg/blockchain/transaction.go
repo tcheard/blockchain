@@ -74,6 +74,12 @@ func NewCoinbaseTransaction(to, data string) (*Transaction, error) {
 		Vout: []*TXOutput{txout},
 	}
 
+	id, err := tx.Hash()
+	if err != nil {
+		return nil, perrors.Wrap(err, "failed to hash transaction")
+	}
+	tx.ID = id
+
 	return &tx, nil
 }
 
