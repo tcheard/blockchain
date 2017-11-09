@@ -24,9 +24,13 @@ func (cli *CLI) send(from, to string, amount int) {
 	}
 	defer bc.DB.Close()
 
-	tx, err := blockchain.NewUTXOTransaction(from, to, amount, bc)
+	UTXOSet := blockchain.UTXOSet{
+		Blockchain: bc,
+	}
+
+	tx, err := blockchain.NewUTXOTransaction(from, to, amount, &UTXOSet)
 	if err != nil {
-		fmt.Printf("Failed to create transaction: %v\n", err)
+		fmt.Printf("Failed to create UTXO transaction: %v\n", err)
 		os.Exit(1)
 	}
 	cb, err := blockchain.NewCoinbaseTransaction(from, "") // For simplicity make the sender the miner
@@ -34,11 +38,13 @@ func (cli *CLI) send(from, to string, amount int) {
 		fmt.Printf("Failed to create coinbase transaction: %v\n", err)
 	}
 
-	err = bc.MineBlock([]*blockchain.Transaction{tx, cb})
+	newBlock, err := bc.MineBlock([]*blockchain.Transaction{tx, cb})
 	if err != nil {
 		fmt.Printf("Failed to mine block: %v\n", err)
 		os.Exit(1)
 	}
+
+	UTXOSet.Update(newBlock)
 
 	fmt.Println("Success!")
 }

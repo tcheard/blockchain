@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-
-	perrors "github.com/pkg/errors"
 )
 
 const walletFile = "wallet.dat"
@@ -23,19 +21,19 @@ func NewWallets() (*Wallets, error) {
 	wallets := &Wallets{}
 	wallets.Wallets = make(map[string]*Wallet)
 	err := wallets.LoadFromFile()
-	return wallets, perrors.Wrap(err, "failed to load wallets from file")
+	return wallets, err
 }
 
 // CreateWallet adds a new wallet to wallets
 func (ws *Wallets) CreateWallet() (string, error) {
 	wallet, err := NewWallet()
 	if err != nil {
-		return "", perrors.Wrap(err, "failed to create new wallet")
+		return "", err
 	}
 
 	wAddr, err := wallet.GetAddress()
 	if err != nil {
-		return "", perrors.Wrap(err, "failed to get address from wallet")
+		return "", err
 	}
 
 	address := fmt.Sprintf("%s", wAddr)
@@ -64,19 +62,19 @@ func (ws Wallets) GetWallet(address string) *Wallet {
 // LoadFromFile loads wallets from the file
 func (ws *Wallets) LoadFromFile() error {
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		return perrors.Wrap(err, "wallet file doesn't exist")
+		return err
 	}
 
 	fileContent, err := ioutil.ReadFile(walletFile)
 	if err != nil {
-		return perrors.Wrap(err, "failed to read content from wallet file")
+		return err
 	}
 
 	var wallets Wallets
 	gob.Register(elliptic.P256())
 	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
 	if err = decoder.Decode(&wallets); err != nil {
-		return perrors.Wrap(err, "failed to decode wallets")
+		return err
 	}
 
 	ws.Wallets = wallets.Wallets
@@ -91,12 +89,8 @@ func (ws *Wallets) SaveToFile() error {
 
 	encoder := gob.NewEncoder(&content)
 	if err := encoder.Encode(&ws); err != nil {
-		return perrors.Wrap(err, "failed to encode wallets")
+		return err
 	}
 
-	if err := ioutil.WriteFile(walletFile, content.Bytes(), 0644); err != nil {
-		return perrors.Wrap(err, "failed to write wallet file")
-	}
-
-	return nil
+	return ioutil.WriteFile(walletFile, content.Bytes(), 0644)
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/boltdb/bolt"
-	perrors "github.com/pkg/errors"
 )
 
 const (
@@ -33,7 +32,7 @@ func NewBlockchain() (*Blockchain, error) {
 
 	db, err := bolt.Open(dbFile, 0600, nil)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to open database file")
+		return nil, err
 	}
 
 	err = db.View(func(tx *bolt.Tx) error {
@@ -44,7 +43,7 @@ func NewBlockchain() (*Blockchain, error) {
 	})
 
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to update database")
+		return nil, err
 	}
 
 	return &Blockchain{tip: tip, DB: db}, nil
@@ -60,35 +59,35 @@ func CreateBlockchain(address string) (*Blockchain, error) {
 
 	db, err := bolt.Open(dbFile, 0600, nil)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to open database file")
+		return nil, err
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		cbtx, err := NewCoinbaseTransaction(address, genesisCoinbaseData)
 		if err != nil {
-			return perrors.Wrap(err, "failed to create new coinbase transaction")
+			return err
 		}
 
 		genesis := NewGenesisBlock(cbtx)
 
 		b, err := tx.CreateBucket([]byte(blocksBucket))
 		if err != nil {
-			return perrors.Wrap(err, "failed to create database bucket")
+			return err
 		}
 
 		genSer, err := genesis.Serialize()
 		if err != nil {
-			return perrors.Wrap(err, "failed to serialize genesis block")
+			return err
 		}
 
 		err = b.Put(genesis.Hash, genSer)
 		if err != nil {
-			return perrors.Wrap(err, "failed to put the genesis block")
+			return err
 		}
 
 		err = b.Put([]byte("l"), genesis.Hash)
 		if err != nil {
-			return perrors.Wrap(err, "failed to put the 'l' key")
+			return err
 		}
 
 		tip = genesis.Hash
@@ -97,37 +96,10 @@ func CreateBlockchain(address string) (*Blockchain, error) {
 	})
 
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to update database")
+		return nil, err
 	}
 
 	return &Blockchain{tip: tip, DB: db}, nil
-}
-
-// FindSpendableOutputs finds and returns unspent outputs to reference in inputs
-func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int, error) {
-	unspentOutputs := make(map[string][]int)
-	accumulated := 0
-
-	unspentTXs, err := bc.FindUnspentTransactions(pubKeyHash)
-	if err != nil {
-		return 0, nil, perrors.Wrap(err, "failed to retrieve unspent transactions")
-	}
-
-Work:
-	for _, tx := range unspentTXs {
-		txID := hex.EncodeToString(tx.ID)
-		for outIdx, out := range tx.Vout {
-			if out.IsLockedWithKey(pubKeyHash) && accumulated < amount {
-				accumulated += out.Value
-				unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
-				if accumulated >= amount {
-					break Work
-				}
-			}
-		}
-	}
-
-	return accumulated, unspentOutputs, nil
 }
 
 // FindTransaction finds a transaction by its ID
@@ -137,7 +109,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 	for {
 		b, err := bci.Next()
 		if err != nil {
-			return Transaction{}, perrors.Wrap(err, "failed to retrieve next block")
+			return Transaction{}, err
 		}
 
 		for _, tx := range b.Transactions {
@@ -154,20 +126,21 @@ func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 	return Transaction{}, errors.New("transaction is not found")
 }
 
-// FindUnspentTransactions returns a list of transactions containing unspent outputs for a given address
-func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) ([]Transaction, error) {
-	var unspentTXs []Transaction
+// FindUTXO finds all unspent transaction outputs and returns transactions with spent outputs removed
+func (bc *Blockchain) FindUTXO() (map[string]*TXOutputs, error) {
+	UTXO := make(map[string]*TXOutputs)
 	spentTXOs := make(map[string][]int)
 	bci := bc.Iterator()
 
 	for {
 		b, err := bci.Next()
 		if err != nil {
-			return nil, perrors.Wrap(err, "failed to retrieve next block")
+			return nil, err
 		}
 
 		for _, tx := range b.Transactions {
 			txID := hex.EncodeToString(tx.ID)
+
 		Outputs:
 			for outIdx, out := range tx.Vout {
 				if spentTXOs[txID] != nil {
@@ -178,22 +151,18 @@ func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) ([]Transaction,
 					}
 				}
 
-				if out.IsLockedWithKey(pubKeyHash) {
-					unspentTXs = append(unspentTXs, *tx)
+				outs := UTXO[txID]
+				if outs == nil {
+					outs = &TXOutputs{}
 				}
+				outs.Outputs = append(outs.Outputs, out)
+				UTXO[txID] = outs
 			}
 
 			if !tx.IsCoinbase() {
 				for _, in := range tx.Vin {
-					usesKey, err := in.UsesKey(pubKeyHash)
-					if err != nil {
-						return nil, perrors.Wrap(err, "failed to determine if tx.in uses key")
-					}
-
-					if usesKey {
-						inTxID := hex.EncodeToString(in.Txid)
-						spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
-					}
+					inTxID := hex.EncodeToString(in.Txid)
+					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
 				}
 			}
 		}
@@ -203,49 +172,29 @@ func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) ([]Transaction,
 		}
 	}
 
-	return unspentTXs, nil
-}
-
-// FindUTXO finds and returns all unspent transaction outputs
-func (bc *Blockchain) FindUTXO(pubKeyHash []byte) ([]*TXOutput, error) {
-	var UTXOs []*TXOutput
-
-	unspentTXs, err := bc.FindUnspentTransactions(pubKeyHash)
-	if err != nil {
-		return nil, perrors.Wrap(err, "failed to find unspent transactions")
-	}
-
-	for _, tx := range unspentTXs {
-		for _, out := range tx.Vout {
-			if out.IsLockedWithKey(pubKeyHash) {
-				UTXOs = append(UTXOs, out)
-			}
-		}
-	}
-
-	return UTXOs, nil
+	return UTXO, nil
 }
 
 // Iterator retrieves an iterator for the blockchain
-func (bc *Blockchain) Iterator() *BlockchainIterator {
-	return &BlockchainIterator{
+func (bc *Blockchain) Iterator() *BIterator {
+	return &BIterator{
 		currentHash: bc.tip,
 		db:          bc.DB,
 	}
 }
 
 // MineBlock creates a new block with the provided transactions
-func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
+func (bc *Blockchain) MineBlock(transactions []*Transaction) (*Block, error) {
 	var lastHash []byte
 
 	for _, tx := range transactions {
 		success, err := bc.VerifyTransaction(tx)
 		if err != nil {
-			return perrors.Wrap(err, "failed to verify transaction")
+			return nil, err
 		}
 
 		if !success {
-			return errors.New("invalid transaction")
+			return nil, errors.New("invalid transaction")
 		}
 	}
 
@@ -256,7 +205,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 		return nil
 	})
 	if err != nil {
-		return perrors.Wrap(err, "failed to retrieve last hash")
+		return nil, err
 	}
 
 	newBlock := NewBlock(transactions, lastHash)
@@ -266,17 +215,15 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 
 		nbSer, err := newBlock.Serialize()
 		if err != nil {
-			return perrors.Wrap(err, "failed to serialize new block")
+			return err
 		}
 
-		err = b.Put(newBlock.Hash, nbSer)
-		if err != nil {
-			return perrors.Wrap(err, "failed to put the new block")
+		if err = b.Put(newBlock.Hash, nbSer); err != nil {
+			return err
 		}
 
-		err = b.Put([]byte("l"), newBlock.Hash)
-		if err != nil {
-			return perrors.Wrap(err, "failed to put the 'l' key")
+		if err = b.Put([]byte("l"), newBlock.Hash); err != nil {
+			return err
 		}
 
 		bc.tip = newBlock.Hash
@@ -284,10 +231,10 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 		return nil
 	})
 	if err != nil {
-		return perrors.Wrap(err, "failed to write new block")
+		return nil, err
 	}
 
-	return nil
+	return newBlock, nil
 }
 
 // SignTransaction signs the inputs of a transaction
@@ -297,7 +244,7 @@ func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey)
 	for _, vin := range tx.Vin {
 		prevTX, err := bc.FindTransaction(vin.Txid)
 		if err != nil {
-			return perrors.Wrap(err, "error while finding transaction")
+			return err
 		}
 
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
@@ -319,7 +266,7 @@ func (bc *Blockchain) VerifyTransaction(tx *Transaction) (bool, error) {
 	for _, vin := range tx.Vin {
 		prevTX, err := bc.FindTransaction(vin.Txid)
 		if err != nil {
-			return false, perrors.Wrap(err, "error while finding transaction")
+			return false, err
 		}
 
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX

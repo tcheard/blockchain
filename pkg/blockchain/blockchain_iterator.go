@@ -2,18 +2,17 @@ package blockchain
 
 import (
 	"github.com/boltdb/bolt"
-	perrors "github.com/pkg/errors"
 )
 
-// BlockchainIterator provides an iterator that allows us to retrieve each
+// BIterator provides an iterator that allows us to retrieve each
 // block in the blockchain
-type BlockchainIterator struct {
+type BIterator struct {
 	currentHash []byte
 	db          *bolt.DB
 }
 
 // Next retrieves the next block from the iterator
-func (i *BlockchainIterator) Next() (*Block, error) {
+func (i *BIterator) Next() (*Block, error) {
 	var block *Block
 
 	err := i.db.View(func(tx *bolt.Tx) error {
@@ -22,7 +21,7 @@ func (i *BlockchainIterator) Next() (*Block, error) {
 		encodedBlock := b.Get(i.currentHash)
 		bl, err := DeserializeBlock(encodedBlock)
 		if err != nil {
-			return perrors.Wrap(err, "failed to deserialize block that was read")
+			return err
 		}
 
 		block = bl
@@ -30,7 +29,7 @@ func (i *BlockchainIterator) Next() (*Block, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to retrieve next block")
+		return nil, err
 	}
 
 	i.currentHash = block.PrevBlockHash

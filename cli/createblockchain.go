@@ -13,7 +13,16 @@ func (cli *CLI) createBlockchain(address string) {
 		fmt.Printf("Failed to create blockchain: %v\n", err)
 		os.Exit(1)
 	}
-	bc.DB.Close()
+	defer bc.DB.Close()
+
+	UTXOSet := blockchain.UTXOSet{
+		Blockchain: bc,
+	}
+	err = UTXOSet.Reindex()
+	if err != nil {
+		fmt.Printf("Failed to reindex blockchain: %v\n", err)
+		os.Exit(1)
+	}
 
 	fmt.Println("Done!")
 }

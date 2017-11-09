@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-
-	perrors "github.com/pkg/errors"
 )
 
 const subsidy = 10
@@ -37,7 +35,7 @@ func (tx Transaction) Serialize() ([]byte, error) {
 	enc := gob.NewEncoder(&encoded)
 	err := enc.Encode(tx)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to encode transaction")
+		return nil, err
 	}
 
 	return encoded.Bytes(), nil
@@ -50,7 +48,7 @@ func (tx *Transaction) Hash() ([]byte, error) {
 
 	ser, err := tx.Serialize()
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to serialize transaction")
+		return nil, err
 	}
 
 	hash := sha256.Sum256(ser)
@@ -78,14 +76,14 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		txCopy.Vin[inID].PubKey = prevTX.Vout[vin.Vout].PubKeyHash
 		h, err := txCopy.Hash()
 		if err != nil {
-			return perrors.Wrap(err, "failed to hash transaction copy")
+			return err
 		}
 		txCopy.ID = h
 		txCopy.Vin[inID].PubKey = nil
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
 		if err != nil {
-			return perrors.Wrap(err, "failed to generate sign transaction data")
+			return err
 		}
 
 		sig := append(r.Bytes(), s.Bytes()...)
@@ -103,7 +101,6 @@ func (tx Transaction) String() string {
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
 
 	for i, input := range tx.Vin {
-
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
 		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.Txid))
 		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Vout))
@@ -161,7 +158,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) (bool, error) {
 		txCopy.Vin[inID].PubKey = prevTX.Vout[vin.Vout].PubKeyHash
 		h, err := txCopy.Hash()
 		if err != nil {
-			return false, perrors.Wrap(err, "failed to hash transaction copy")
+			return false, err
 		}
 		txCopy.ID = h
 		txCopy.Vin[inID].PubKey = nil
@@ -214,7 +211,7 @@ func NewCoinbaseTransaction(to, data string) (*Transaction, error) {
 
 	id, err := tx.Hash()
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to hash transaction")
+		return nil, err
 	}
 	tx.ID = id
 
@@ -222,24 +219,24 @@ func NewCoinbaseTransaction(to, data string) (*Transaction, error) {
 }
 
 // NewUTXOTransaction creates a new transaction
-func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) (*Transaction, error) {
+func NewUTXOTransaction(from, to string, amount int, UTXOSet *UTXOSet) (*Transaction, error) {
 	var inputs []*TXInput
 	var outputs []*TXOutput
 
 	wallets, err := NewWallets()
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to create new wallets")
+		return nil, err
 	}
 
 	wallet := wallets.GetWallet(from)
 	pubKeyHash, err := HashPublicKey(wallet.PublicKey)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to hash public key of wallet")
+		return nil, err
 	}
 
-	acc, validOutputs, err := bc.FindSpendableOutputs(pubKeyHash, amount)
+	acc, validOutputs, err := UTXOSet.FindSpendableOutputs(pubKeyHash, amount)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to find spendable outputs")
+		return nil, err
 	}
 
 	if acc < amount {
@@ -249,7 +246,7 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) (*Transacti
 	for txid, outs := range validOutputs {
 		txID, err := hex.DecodeString(txid)
 		if err != nil {
-			return nil, perrors.Wrap(err, "failed to decode transaction id")
+			return nil, err
 		}
 
 		for _, out := range outs {
@@ -277,13 +274,13 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) (*Transacti
 
 	id, err := tx.Hash()
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to hash transaction")
+		return nil, err
 	}
 	tx.ID = id
 
-	err = bc.SignTransaction(tx, wallet.PrivateKey)
+	err = UTXOSet.Blockchain.SignTransaction(tx, wallet.PrivateKey)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to sign transaction")
+		return nil, err
 	}
 
 	return tx, nil

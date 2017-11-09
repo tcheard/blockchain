@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/crypto/ripemd160"
 
-	perrors "github.com/pkg/errors"
 	"github.com/tcheard/blockchain/pkg/util"
 )
 
@@ -28,7 +27,7 @@ type Wallet struct {
 func NewWallet() (*Wallet, error) {
 	private, public, err := newKeyPair()
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to generate keypair")
+		return nil, err
 	}
 
 	return &Wallet{PrivateKey: private, PublicKey: public}, nil
@@ -38,7 +37,7 @@ func NewWallet() (*Wallet, error) {
 func (w Wallet) GetAddress() ([]byte, error) {
 	pubKeyHash, err := HashPublicKey(w.PublicKey)
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to hash public key")
+		return nil, err
 	}
 
 	versionedPayload := append([]byte{version}, pubKeyHash...)
@@ -56,7 +55,7 @@ func HashPublicKey(pubKey []byte) ([]byte, error) {
 	hasher := ripemd160.New()
 	_, err := hasher.Write(publicSHA[:])
 	if err != nil {
-		return nil, perrors.Wrap(err, "failed to hash the public key")
+		return nil, err
 	}
 
 	return hasher.Sum(nil), nil
@@ -76,7 +75,7 @@ func newKeyPair() (ecdsa.PrivateKey, []byte, error) {
 	c := elliptic.P256()
 	private, err := ecdsa.GenerateKey(c, rand.Reader)
 	if err != nil {
-		return ecdsa.PrivateKey{}, nil, perrors.Wrap(err, "failed to generate key")
+		return ecdsa.PrivateKey{}, nil, err
 	}
 	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
 

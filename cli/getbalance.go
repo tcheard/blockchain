@@ -21,10 +21,14 @@ func (cli *CLI) getBalance(address string) {
 	}
 	defer bc.DB.Close()
 
+	UTXOSet := blockchain.UTXOSet{
+		Blockchain: bc,
+	}
+
 	balance := 0
 	pubKeyHash := util.Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	UTXOs, err := bc.FindUTXO(pubKeyHash)
+	UTXOs, err := UTXOSet.FindUTXO(pubKeyHash)
 	if err != nil {
 		fmt.Printf("Failed to find unspent transaction outputs: %v\n", err)
 		os.Exit(1)
