@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -128,6 +130,30 @@ Work:
 	return accumulated, unspentOutputs, nil
 }
 
+// FindTransaction finds a transaction by its ID
+func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
+	bci := bc.Iterator()
+
+	for {
+		b, err := bci.Next()
+		if err != nil {
+			return Transaction{}, perrors.Wrap(err, "failed to retrieve next block")
+		}
+
+		for _, tx := range b.Transactions {
+			if bytes.Compare(tx.ID, ID) == 0 {
+				return *tx, nil
+			}
+		}
+
+		if len(b.PrevBlockHash) == 0 {
+			break
+		}
+	}
+
+	return Transaction{}, errors.New("transaction is not found")
+}
+
 // FindUnspentTransactions returns a list of transactions containing unspent outputs for a given address
 func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) ([]Transaction, error) {
 	var unspentTXs []Transaction
@@ -212,6 +238,17 @@ func (bc *Blockchain) Iterator() *BlockchainIterator {
 func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 	var lastHash []byte
 
+	for _, tx := range transactions {
+		success, err := bc.VerifyTransaction(tx)
+		if err != nil {
+			return perrors.Wrap(err, "failed to verify transaction")
+		}
+
+		if !success {
+			return errors.New("invalid transaction")
+		}
+	}
+
 	err := bc.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		lastHash = b.Get([]byte("l"))
@@ -251,6 +288,40 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) error {
 	}
 
 	return nil
+}
+
+// SignTransaction signs the inputs of a transaction
+func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) error {
+	prevTXs := make(map[string]Transaction)
+
+	for _, vin := range tx.Vin {
+		prevTX, err := bc.FindTransaction(vin.Txid)
+		if err != nil {
+			return perrors.Wrap(err, "error while finding transaction")
+		}
+
+		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+	}
+
+	tx.Sign(privKey, prevTXs)
+
+	return nil
+}
+
+// VerifyTransaction verifies transaction input signatures
+func (bc *Blockchain) VerifyTransaction(tx *Transaction) (bool, error) {
+	prevTXs := make(map[string]Transaction)
+
+	for _, vin := range tx.Vin {
+		prevTX, err := bc.FindTransaction(vin.Txid)
+		if err != nil {
+			return false, perrors.Wrap(err, "error while finding transaction")
+		}
+
+		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+	}
+
+	return tx.Verify(prevTXs)
 }
 
 func dbExists() bool {

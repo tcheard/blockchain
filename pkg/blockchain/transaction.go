@@ -2,11 +2,15 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	perrors "github.com/pkg/errors"
@@ -54,6 +58,44 @@ func (tx *Transaction) Hash() ([]byte, error) {
 	return hash[:], nil
 }
 
+// Sign signs each input of a Transaction
+func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+
+	for _, vin := range tx.Vin {
+		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
+			return errors.New("previous transaction is not correct")
+		}
+	}
+
+	txCopy := tx.TrimmedCopy()
+
+	for inID, vin := range txCopy.Vin {
+		prevTX := prevTXs[hex.EncodeToString(vin.Txid)]
+		txCopy.Vin[inID].Signature = nil
+		txCopy.Vin[inID].PubKey = prevTX.Vout[vin.Vout].PubKeyHash
+		h, err := txCopy.Hash()
+		if err != nil {
+			return perrors.Wrap(err, "failed to hash transaction copy")
+		}
+		txCopy.ID = h
+		txCopy.Vin[inID].PubKey = nil
+
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
+		if err != nil {
+			return perrors.Wrap(err, "failed to generate sign transaction data")
+		}
+
+		sig := append(r.Bytes(), s.Bytes()...)
+
+		tx.Vin[inID].Signature = sig
+	}
+
+	return nil
+}
+
 // String returns a human-readable representation of a transaction
 func (tx Transaction) String() string {
 	var lines []string
@@ -76,6 +118,77 @@ func (tx Transaction) String() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// TrimmedCopy creates a trimmed copy of Transaction to be used in signing
+func (tx *Transaction) TrimmedCopy() Transaction {
+	var inputs []*TXInput
+	var outputs []*TXOutput
+
+	for _, vin := range tx.Vin {
+		inputs = append(inputs, &TXInput{vin.Txid, vin.Vout, nil, nil})
+	}
+
+	for _, vout := range tx.Vout {
+		outputs = append(outputs, &TXOutput{vout.Value, vout.PubKeyHash})
+	}
+
+	return Transaction{
+		ID:   tx.ID,
+		Vin:  inputs,
+		Vout: outputs,
+	}
+}
+
+// Verify verifies the signatures of the transaction inputs
+func (tx *Transaction) Verify(prevTXs map[string]Transaction) (bool, error) {
+	if tx.IsCoinbase() {
+		return true, nil
+	}
+
+	for _, vin := range tx.Vin {
+		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
+			return false, errors.New("previous transaction is not correct")
+		}
+	}
+
+	txCopy := tx.TrimmedCopy()
+	curve := elliptic.P256()
+
+	for inID, vin := range tx.Vin {
+		prevTX := prevTXs[hex.EncodeToString(vin.Txid)]
+		txCopy.Vin[inID].Signature = nil
+		txCopy.Vin[inID].PubKey = prevTX.Vout[vin.Vout].PubKeyHash
+		h, err := txCopy.Hash()
+		if err != nil {
+			return false, perrors.Wrap(err, "failed to hash transaction copy")
+		}
+		txCopy.ID = h
+		txCopy.Vin[inID].PubKey = nil
+
+		r := big.Int{}
+		s := big.Int{}
+		sigLen := len(vin.Signature)
+		r.SetBytes(vin.Signature[:(sigLen / 2)])
+		s.SetBytes(vin.Signature[(sigLen / 2):])
+
+		x := big.Int{}
+		y := big.Int{}
+		keyLen := len(vin.PubKey)
+		x.SetBytes(vin.PubKey[:(keyLen / 2)])
+		y.SetBytes(vin.PubKey[(keyLen / 2):])
+
+		rawPubKey := ecdsa.PublicKey{
+			Curve: curve,
+			X:     &x,
+			Y:     &y,
+		}
+		if !ecdsa.Verify(&rawPubKey, txCopy.ID, &r, &s) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 // NewCoinbaseTransaction creates a new coinbase transaction
@@ -167,6 +280,11 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) (*Transacti
 		return nil, perrors.Wrap(err, "failed to hash transaction")
 	}
 	tx.ID = id
+
+	err = bc.SignTransaction(tx, wallet.PrivateKey)
+	if err != nil {
+		return nil, perrors.Wrap(err, "failed to sign transaction")
+	}
 
 	return tx, nil
 }
